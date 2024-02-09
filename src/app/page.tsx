@@ -1,95 +1,68 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/api';
+import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
+import * as mutations from '@/graphql/mutations';
+// 1. Add the queries as an import
+import * as queries from '@/graphql/queries';
 
-export default function Home() {
+import config from '@/amplifyconfiguration.json';
+
+const cookiesClient = generateServerClientUsingCookies({
+  config,
+  cookies
+});
+
+async function createTodo(formData: FormData) {
+  'use server';
+  const { data } = await cookiesClient.graphql({
+    query: mutations.createTodo,
+    variables: {
+      input: {
+        name: formData.get('name')?.toString() ?? ''
+      }
+    }
+  });
+
+  console.log('Created Todo: ', data?.createTodo);
+
+  revalidatePath('/');
+}
+
+export default async function Home() {
+  // 2. Fetch additional todos
+  const { data, errors } = await cookiesClient.graphql({
+    query: queries.listTodos
+  });
+
+  const todos = data.listTodos.items;
+
   return (
-    <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>src/app/page.tsx</code>
-        </p>
+    <div
+      style={{
+        maxWidth: '500px',
+        margin: '0 auto',
+        textAlign: 'center',
+        marginTop: '100px'
+      }}
+    >
+      <form action={createTodo}>
+        <input name="name" placeholder="Add a todo" />
+        <button type="submit">Add</button>
+      </form>
+
+      {/* 3. Handle edge cases & zero state & error states*/}
+      {(!todos || todos.length === 0 || errors) && (
         <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+          <p>No todos, please add one.</p>
         </div>
-      </div>
+      )}
 
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore starter templates for Next.js.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      {/* 4. Display todos*/}
+      <ul>
+        {todos.map((todo) => {
+          return <li style={{ listStyle: 'none' }}>{todo.name}</li>;
+        })}
+      </ul>
+    </div>
   );
 }
