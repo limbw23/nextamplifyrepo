@@ -29,6 +29,9 @@ async function createTodo(formData: FormData) {
 }
 
 export default async function Home() {
+
+  revalidatePath('/');
+
   // 2. Fetch additional todos
   const { data, errors } = await cookiesClient.graphql({
     query: queries.listTodos

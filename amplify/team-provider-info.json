@@ -14,6 +14,12 @@
     "categories": {
       "api": {
         "nextamplified": {}
+      },
+      "hosting": {
+        "amplifyhosting": {
+          "appId": "d1iqyrelf2b0mj",
+          "type": "cicd"
+        }
       }
     }
   }
