@@ -1,10 +1,9 @@
+import { useState, useEffect } from 'react';
 import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/api';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import * as mutations from '@/graphql/mutations';
-// 1. Add the queries as an import
 import * as queries from '@/graphql/queries';
-
 import config from '@/amplifyconfiguration.json';
 
 const cookiesClient = generateServerClientUsingCookies({
@@ -13,59 +12,89 @@ const cookiesClient = generateServerClientUsingCookies({
 });
 
 async function createTodo(formData: FormData) {
-  'use server';
-  const { data } = await cookiesClient.graphql({
-    query: mutations.createTodo,
-    variables: {
-      input: {
-        name: formData.get('name')?.toString() ?? ''
+  try {
+    const { data } = await cookiesClient.graphql({
+      query: mutations.createTodo,
+      variables: {
+        input: {
+          name: formData.get('name')?.toString() ?? ''
+        }
       }
-    }
-  });
+    });
 
-  console.log('Created Todo: ', data?.createTodo);
+    console.log('Created Todo: ', data?.createTodo);
 
-  revalidatePath('/');
+    revalidatePath('/'); // Revalidate after creating todo
+  } catch (error) {
+    console.error('Error creating todo:', error);
+  }
 }
 
-export default async function Home() {
+interface Todo {
+  id: string;
+  name: string;
+  // Define other properties of Todo if needed
+}
 
-  revalidatePath('/');
+interface HomeProps {
+  initialTodos: Todo[];
+}
 
-  // 2. Fetch additional todos
-  const { data, errors } = await cookiesClient.graphql({
-    query: queries.listTodos
-  });
+export default function Home({ initialTodos }: HomeProps) {
+  const [todos, setTodos] = useState(initialTodos);
 
-  const todos = data.listTodos.items;
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      const { data } = await cookiesClient.graphql({
+        query: queries.listTodos
+      });
+
+      setTodos(data.listTodos.items);
+    }, 60000); // Refresh todos every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   return (
-    <div
-      style={{
-        maxWidth: '500px',
-        margin: '0 auto',
-        textAlign: 'center',
-        marginTop: '100px'
-      }}
-    >
-      <form action={createTodo}>
+    <div style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center', marginTop: '100px' }}>
+      <form onSubmit={(e) => { e.preventDefault(); createTodo(new FormData(e.target as HTMLFormElement)); }}>
         <input name="name" placeholder="Add a todo" />
         <button type="submit">Add</button>
       </form>
 
-      {/* 3. Handle edge cases & zero state & error states*/}
-      {(!todos || todos.length === 0 || errors) && (
-        <div>
-          <p>No todos, please add one.</p>
-        </div>
+      {(todos && todos.length > 0) ? (
+        <ul>
+          {todos.map((todo, index) => (
+            <li key={index} style={{ listStyle: 'none' }}>{todo.name}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>No todos, please add one.</p>
       )}
-
-      {/* 4. Display todos*/}
-      <ul>
-        {todos.map((todo) => {
-          return <li style={{ listStyle: 'none' }}>{todo.name}</li>;
-        })}
-      </ul>
     </div>
   );
+}
+
+export async function getServerSideProps() {
+  try {
+    const { data } = await cookiesClient.graphql({
+      query: queries.listTodos
+    });
+
+    const initialTodos: Todo[] = data.listTodos.items;
+
+    return {
+      props: {
+        initialTodos
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching initial todos:', error);
+
+    return {
+      props: {
+        initialTodos: []
+      }
+    };
+  }
 }
